@@ -20,12 +20,17 @@ from message_formatter import format_hotspot_message
 SEPARATOR = "=" * 60
 
 
-def _parse_today(date_str: str | None) -> datetime:
-    """Parse --date argument or return current Thai time."""
+def _parse_today(date_str: str | None, time_str: str | None) -> datetime:
+    """Parse --date/--time arguments or return current Thai time."""
     if date_str:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
-        # Set to end of day so all pass times on that date are included
-        return dt.replace(hour=23, minute=59, tzinfo=TZ_BANGKOK)
+        if time_str:
+            # Parse HH:MM
+            h, m = map(int, time_str.split(":"))
+            return dt.replace(hour=h, minute=m, tzinfo=TZ_BANGKOK)
+        else:
+            # Set to end of day to get the afternoon round if no time specified
+            return dt.replace(hour=23, minute=59, tzinfo=TZ_BANGKOK)
     return datetime.now(TZ_BANGKOK)
 
 
@@ -230,6 +235,12 @@ def main():
         help="Override 'today' in YYYY-MM-DD format (default: current Thai date).",
     )
     parser.add_argument(
+        "--time",
+        type=str,
+        default=None,
+        help="Override time in HH:MM format (default: 23:59 if --date is used, else current time).",
+    )
+    parser.add_argument(
         "--date-range",
         type=int,
         default=2,
@@ -238,9 +249,9 @@ def main():
     args = parser.parse_args()
 
     config = Config()
-    today = _parse_today(args.date)
+    today = _parse_today(args.date, args.time)
 
-    print(f"\n🕐 Target date: {today.strftime('%Y-%m-%d')}")
+    print(f"\n🕐 Target date/time: {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📡 FIRMS date range: {args.date_range} day(s)")
     print(f"🏔  Province filter: {config.PROVINCE_FILTER}")
     print()

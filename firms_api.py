@@ -138,8 +138,13 @@ def discover_pass_times(
         # Filter for today's Thai date only
         df_today = df[df["thai_date"] == today_str].copy()
 
-        # Filter: thai_time <= current time (only hotspots up to now)
-        df_today = df_today[df_today["thai_time"] <= now_time]
+        # Determine start time based on current time (00:00 or 12:00)
+        start_time = "0000" if now_time < "1200" else "1200"
+
+        # Filter: start_time <= thai_time <= current time
+        df_today = df_today[
+            (df_today["thai_time"] >= start_time) & (df_today["thai_time"] <= now_time)
+        ]
 
         if df_today.empty:
             logger.info("No hotspots on %s for %s", today_str, src)

@@ -74,13 +74,16 @@ def format_hotspot_message(
 
     # No hotspots
     if not hotspots:
+        start_time_str = "00:00น." if now.hour < 12 else "12:00น."
+        base_no_hotspot = f"ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน รอบ {start_time_str} ถึง {current_time_str}"
+        
         if gistda_unavailable:
             lines.append(
-                f"ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน "
+                f"{base_no_hotspot} "
                 f"(ไม่มีข้อมูลให้ดาวน์โหลดจาก GISTDA เวลา {current_time_str})"
             )
         else:
-            lines.append("ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน")
+            lines.append(base_no_hotspot)
         lines.append("")
         lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
         return "\n".join(lines)
