@@ -105,13 +105,16 @@ def test_message_formatting(hotspots, config: Config, today: datetime):
     print("TEST 3: Message Formatting")
     print(SEPARATOR)
 
-    message = format_hotspot_message(
+    messages = format_hotspot_message(
         hotspots=hotspots,
         schedule_times=config.SCHEDULE_TIMES,
         now=today,
     )
-    print(message)
-    print(f"\n📏 Message length: {len(message)} chars")
+    for i, msg in enumerate(messages, 1):
+        print(f"--- Bubble {i} ---")
+        print(msg)
+        print()
+    print(f"\n📏 Total loops: {len(messages)} bubbles")
     print()
 
 
@@ -121,13 +124,15 @@ def test_message_no_hotspots(config: Config, today: datetime):
     print("TEST 4: Message with No Hotspots")
     print(SEPARATOR)
 
-    message = format_hotspot_message(
+    messages = format_hotspot_message(
         hotspots=[],
         schedule_times=config.SCHEDULE_TIMES,
         now=today,
     )
-    print(message)
-    print()
+    for i, msg in enumerate(messages, 1):
+        print(f"--- Bubble {i} ---")
+        print(msg)
+        print()
 
 
 def test_message_with_sample_data(config: Config, today: datetime):
@@ -214,13 +219,16 @@ def test_message_with_sample_data(config: Config, today: datetime):
         },
     ]
 
-    message = format_hotspot_message(
+    messages = format_hotspot_message(
         hotspots=sample,
         schedule_times=config.SCHEDULE_TIMES,
         now=today,
     )
-    print(message)
-    print(f"\n📏 Message length: {len(message)} chars")
+    for i, msg in enumerate(messages, 1):
+        print(f"--- Bubble {i} ---")
+        print(msg)
+        print()
+    print(f"\n📏 Total loops: {len(messages)} bubbles")
     print()
 
 

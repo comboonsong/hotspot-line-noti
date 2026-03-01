@@ -98,10 +98,13 @@ def main():
     print("\n" + "━" * 60)
     print("FORMATTED MESSAGE:")
     print("━" * 60)
-    message = format_hotspot_message(hotspots, config.SCHEDULE_TIMES, today)
-    print(message)
+    messages = format_hotspot_message(hotspots, config.SCHEDULE_TIMES, today)
+    for i, msg in enumerate(messages, 1):
+        print(f"--- Bubble {i} ---")
+        print(msg)
+        print()
     print("━" * 60)
-    print(f"📏 Message length: {len(message)} chars")
+    print(f"📏 Total bubbles: {len(messages)}")
 
 
 if __name__ == "__main__":

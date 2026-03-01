@@ -43,11 +43,15 @@ def format_hotspot_message(
     schedule_times: list[str],
     now: datetime | None = None,
     gistda_unavailable: bool = False,
-) -> str:
+) -> list[str]:
     """
-    Format hotspot data into a Thai notification message.
+    Format hotspot data into Thai notification message(s).
 
-    Groups by (satellite_name, th_time), then by (sub_district, district).
+    If total hotspots >= 11, the message is separated into multiple bubbles:
+      1) Header
+      2) One bubble per satellite
+      3) Ending
+    Otherwise, returns a single combined string bubble.
 
     Args:
         hotspots: List of hotspot dicts from gistda_excel.download_and_parse_excel().
@@ -58,7 +62,7 @@ def format_hotspot_message(
                             downloads failed.
 
     Returns:
-        Formatted Thai message string.
+        List of formatted Thai message strings (bubbles) to send.
     """
     if now is None:
         now = datetime.now(TZ_BANGKOK)
@@ -66,66 +70,108 @@ def format_hotspot_message(
     today_str = _format_thai_date(now)
     current_time_str = f"{now.strftime('%H:%M')}น."
 
-    # Header
-    lines = [
+    # 1. Prepare Header
+    header_lines = [
         "เรียน ผู้บริหารและผู้เกี่ยวข้อง",
         f"     สนง.ทสจ. ลำพูน ขอรายงานข้อมูลจุดความร้อน วันที่ {today_str}",
     ]
 
-    # No hotspots
+    # No hotspots scenario
     if not hotspots:
         start_time_str = "00:00น." if now.hour < 12 else "12:00น."
         base_no_hotspot = f"ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน รอบ {start_time_str} ถึง {current_time_str}"
         
         if gistda_unavailable:
-            lines.append(
+            header_lines.append(
                 f"{base_no_hotspot} "
                 f"(ไม่มีข้อมูลให้ดาวน์โหลดจาก GISTDA เวลา {current_time_str})"
             )
         else:
-            lines.append(base_no_hotspot)
-        lines.append("")
-        lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
-        return "\n".join(lines)
+            header_lines.append(base_no_hotspot)
+        header_lines.append("")
+        header_lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
+        return ["\n".join(header_lines)]
 
-    # Group by (satellite_name, th_time)
-    sat_time_groups: dict[tuple[str, str], list[dict]] = {}
+    # 2. Group by satellite_name, then by th_time
+    # Structure: { satellite_name: { th_time: [hotspots] } }
+    sat_groups: dict[str, dict[str, list[dict]]] = {}
     for spot in hotspots:
-        key = (spot.get("satellite_name", "unknown"), spot.get("th_time", "0000"))
-        sat_time_groups.setdefault(key, []).append(spot)
+        sat_name = spot.get("satellite_name", "unknown")
+        th_time = spot.get("th_time", "0000")
+        
+        if sat_name not in sat_groups:
+            sat_groups[sat_name] = {}
+        if th_time not in sat_groups[sat_name]:
+            sat_groups[sat_name][th_time] = []
+            
+        sat_groups[sat_name][th_time].append(spot)
 
-    # Sort groups by th_time first, then satellite order
-    sorted_groups = sorted(
-        sat_time_groups.items(),
-        key=lambda x: (x[0][1], SAT_ORDER.get(x[0][0], 99)),
+    # Sort satellites by SAT_ORDER
+    sorted_sats = sorted(
+        sat_groups.items(),
+        key=lambda x: SAT_ORDER.get(x[0], 99)
     )
 
-    for (satellite_name, th_time_raw), spots in sorted_groups:
-        th_time = _format_time(th_time_raw)
-        group_count = len(spots)
+    should_separate = len(hotspots) >= 11
+    bubbles: list[str] = []
 
-        lines.append("")
-        lines.append(
-            f"พบจุดความร้อนจากดาวเทียม {satellite_name} ระบบ VIIRS "
-            f"รอบเวลา {th_time} จำนวน {group_count} จุด ดังนี้"
-        )
+    if should_separate:
+        # Push header alone
+        bubbles.append("\n".join(header_lines))
+    else:
+        # We will keep combining everything into header_lines
+        pass
 
-        # Sub-group by (sub_district_th, district_th)
-        area_groups: dict[tuple[str, str], list[dict]] = {}
-        for spot in spots:
-            area_key = (spot.get("sub_district_th", ""), spot.get("district_th", ""))
-            area_groups.setdefault(area_key, []).append(spot)
+    # 3. Build text for each satellite
+    combined_body_lines = []
+    for satellite_name, time_groups in sorted_sats:
+        sat_lines = []
+        
+        # Sort time groups chronologically
+        sorted_times = sorted(time_groups.items(), key=lambda x: x[0])
+        
+        for th_time_raw, spots in sorted_times:
+            th_time = _format_time(th_time_raw)
+            group_count = len(spots)
 
-        for (sub_district, district), area_spots in area_groups.items():
-            area_count = len(area_spots)
-            lines.append(f"ต.{sub_district} อ.{district} จำนวน {area_count} จุด")
+            if not should_separate and len(combined_body_lines) > 0 or len(sat_lines) > 0:
+                sat_lines.append("")
+                
+            sat_lines.append(
+                f"พบจุดความร้อนจากดาวเทียม {satellite_name} ระบบ VIIRS "
+                f"รอบเวลา {th_time} จำนวน {group_count} จุด ดังนี้"
+            )
 
-            for spot in area_spots:
-                gmap_link = spot.get("google_maps_link", "")
-                land_use = spot.get("land_use", "")
-                lines.append(f"{gmap_link} ({land_use})")
+            # Sub-group by (sub_district_th, district_th)
+            area_groups: dict[tuple[str, str], list[dict]] = {}
+            for spot in spots:
+                area_key = (spot.get("sub_district_th", ""), spot.get("district_th", ""))
+                area_groups.setdefault(area_key, []).append(spot)
 
-    lines.append("")
-    lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
+            for (sub_district, district), area_spots in area_groups.items():
+                area_count = len(area_spots)
+                sat_lines.append(f"ต.{sub_district} อ.{district} จำนวน {area_count} จุด")
 
-    return "\n".join(lines)
+                for spot in area_spots:
+                    gmap_link = spot.get("google_maps_link", "")
+                    land_use = spot.get("land_use", "")
+                    sat_lines.append(f"{gmap_link} ({land_use})")
+        
+        if should_separate:
+            # One complete bubble per satellite
+            bubbles.append("\n".join(sat_lines))
+        else:
+            # Accumulate
+            combined_body_lines.append("")
+            combined_body_lines.extend(sat_lines)
+
+    # 4. Prepare Ending
+    ending_lines = ["\nจึงเรียนมาเพื่อโปรดพิจารณา"]
+
+    if should_separate:
+        bubbles.append("\n".join(ending_lines).strip())
+        return bubbles
+    else:
+        # Combine Header + Body + Ending
+        full_message_lines = header_lines + combined_body_lines + ending_lines
+        return ["\n".join(full_message_lines)]

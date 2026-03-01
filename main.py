@@ -58,18 +58,18 @@ def job(config: Config) -> None:
         gistda_unavailable = len(pass_times) > 0 and files_downloaded == 0
 
         # 3. Format notification message
-        message = format_hotspot_message(
+        messages = format_hotspot_message(
             hotspots=hotspots,
             schedule_times=config.SCHEDULE_TIMES,
             gistda_unavailable=gistda_unavailable,
         )
-        logger.info("Formatted message (%d chars).", len(message))
+        logger.info("Formatted %d message bubbles.", len(messages))
 
         # 4. Send to LINE group
         send_group_message(
             channel_access_token=config.LINE_CHANNEL_ACCESS_TOKEN,
             group_id=config.LINE_GROUP_ID,
-            message_text=message,
+            message_texts=messages,
         )
         logger.info("=== Job completed successfully ===")
 
