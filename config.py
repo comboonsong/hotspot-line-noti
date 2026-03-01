@@ -48,10 +48,22 @@ class Config:
         "N_Vi1": "Suomi NPP",
         "N_Vi2": "NOAA-20",
         "N_Vi3": "NOAA-21",
+        "G_Vi1": "Suomi NPP - GISTDA",
+    }
+
+    # NASA folder → GISTDA folder mapping
+    # Satellites that are available in both NASA and GISTDA folders.
+    # Format: {nasa_sat_name: (gistda_sat_name, display_name)}
+    GISTDA_FOLDER_MAP: dict[str, tuple[str, str]] = {
+        "N_Vi1": ("G_Vi1", "Suomi NPP - GISTDA"),
     }
 
     # GISTDA Excel base URL
     GISTDA_EXCEL_BASE_URL: str = "https://disaster.gistda.or.th/api/v2/file/download"
+
+    # Time spread for exact match tolerance (minutes)
+    TIME_SPREAD: int = int(os.getenv("TIME_SPREAD", "5"))
+    GISTDA_TIME_SPREAD: int = int(os.getenv("GISTDA_TIME_SPREAD", "10"))
 
     def validate(self) -> None:
         """Validate that required config values are set."""

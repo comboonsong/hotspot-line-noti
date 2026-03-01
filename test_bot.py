@@ -75,6 +75,9 @@ def test_excel_download(pass_times, config: Config):
     hotspots, files_downloaded = download_and_parse_excel(
         pass_times=pass_times,
         province_filter=config.PROVINCE_FILTER,
+        time_spread=config.TIME_SPREAD,
+        gistda_time_spread=config.GISTDA_TIME_SPREAD,
+        gistda_folder_map=config.GISTDA_FOLDER_MAP,
     )
 
     if hotspots:
@@ -173,6 +176,21 @@ def test_message_with_sample_data(config: Config, today: datetime):
             "direction": "SW",
             "google_maps_link": "http://maps.google.com/maps?q=18.18848,98.93841",
             "satellite_name": "Suomi NPP",
+        },
+        {
+            "hotspot_id": "GG1202602261901w5nq8u2gd4",
+            "date_th": "26 กุมภาพันธ์ 2026",
+            "th_time": "0201",
+            "sub_district_th": "ศรีวิชัย",
+            "district_th": "ลี้",
+            "province_th": "ลำพูน",
+            "responsible_area": "ป่าอนุรักษ์",
+            "land_use": "พื้นที่ป่า",
+            "nearest_village": "บ้านห้วยเรือนแม่เอิบ",
+            "distance_km": "3.87",
+            "direction": "NW",
+            "google_maps_link": "http://maps.google.com/maps?q=18.04154,98.82314",
+            "satellite_name": "Suomi NPP - GISTDA",
         },
         {
             "hotspot_id": "VG2202602261337x7abc12345",

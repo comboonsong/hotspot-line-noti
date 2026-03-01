@@ -48,6 +48,9 @@ def job(config: Config) -> None:
         hotspots, files_downloaded = download_and_parse_excel(
             pass_times=pass_times,
             province_filter=config.PROVINCE_FILTER,
+            time_spread=config.TIME_SPREAD,
+            gistda_time_spread=config.GISTDA_TIME_SPREAD,
+            gistda_folder_map=config.GISTDA_FOLDER_MAP,
         )
         logger.info("Parsed %d hotspots from %d Excel files.", len(hotspots), files_downloaded)
 

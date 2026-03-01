@@ -22,7 +22,7 @@ THAI_MONTHS = [
 TZ_BANGKOK = timezone(timedelta(hours=7))
 
 # Satellite display order
-SAT_ORDER = {"Suomi NPP": 0, "NOAA-20": 1, "NOAA-21": 2}
+SAT_ORDER = {"Suomi NPP": 0, "Suomi NPP - GISTDA": 1, "NOAA-20": 2, "NOAA-21": 3}
 
 
 def _format_thai_date(dt: datetime) -> str:

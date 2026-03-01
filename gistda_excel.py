@@ -234,10 +234,92 @@ def _try_download_excel(
     return None, ""
 
 
+def _download_and_parse_single(
+    sat_name: str,
+    date_str: str,
+    base_time: str,
+    display_name: str,
+    time_spread: int,
+    province_filter: str,
+    downloaded_files: set[str],
+) -> list[dict]:
+    """
+    Download one Excel file (with fuzzy time matching), parse it, and return hotspots.
+
+    Adds to downloaded_files set if successful.
+    Returns empty list on failure or if the file was already downloaded.
+
+    Args:
+        sat_name: GISTDA satellite name (e.g. "N_Vi1" or "G_Vi1").
+        date_str: Thai date as "yyyymmdd".
+        base_time: Base Thai time as "HHMM".
+        display_name: Satellite display name for logging and result dicts.
+        time_spread: Minutes to search around base_time.
+        province_filter: Province name to filter hotspots.
+        downloaded_files: Set of already-downloaded file keys (mutated in place).
+
+    Returns:
+        List of hotspot dicts filtered by province.
+    """
+    content, matched_time = _try_download_excel(
+        sat_name=sat_name,
+        date_str=date_str,
+        base_time=base_time,
+        display_name=display_name,
+        time_spread=time_spread,
+    )
+
+    if content is None:
+        logger.warning(
+            "No Excel found for %s %s_%s (tried ±%d min). Skipping.",
+            display_name, date_str, base_time, time_spread,
+        )
+        return []
+
+    # Skip if we already downloaded this exact file
+    file_key = f"{sat_name}_{date_str}_{matched_time}"
+    if file_key in downloaded_files:
+        logger.info("Already downloaded %s, skipping.", file_key)
+        return []
+    downloaded_files.add(file_key)
+
+    # Save to temp file and parse
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    logger.info(
+        "Saved Excel to %s (%d bytes) — matched time: %s",
+        tmp_path, len(content), matched_time,
+    )
+
+    hotspots = _parse_excel_sheet(
+        filepath=tmp_path,
+        province_filter=province_filter,
+        sat_display_name=display_name,
+        th_time=matched_time,
+    )
+
+    logger.info(
+        "Parsed %d hotspots for %s in %s (time %s)",
+        len(hotspots), province_filter, display_name, matched_time,
+    )
+
+    # Clean up temp file
+    try:
+        Path(tmp_path).unlink()
+    except OSError:
+        pass
+
+    return hotspots
+
+
 def download_and_parse_excel(
     pass_times: list,
     province_filter: str = "ลำพูน",
     time_spread: int = 5,
+    gistda_time_spread: int = 10,
+    gistda_folder_map: dict[str, tuple[str, str]] | None = None,
 ) -> tuple[list[dict], int]:
     """
     Download and parse GISTDA Excel files for each discovered pass time.
@@ -245,10 +327,18 @@ def download_and_parse_excel(
     Uses fuzzy time matching: if the exact FIRMS-reported time doesn't have
     a matching Excel file, tries ±time_spread minutes around it.
 
+    For satellites that also exist in the GISTDA folder (specified by
+    gistda_folder_map), an additional download is attempted from the
+    GISTDA folder path (e.g. G_Vi1 instead of N_Vi1).
+
     Args:
         pass_times: List of PassTime objects from firms_api.discover_pass_times().
         province_filter: Province name to filter hotspots.
         time_spread: Minutes to search around each pass time (default 5).
+        gistda_time_spread: Minutes to search around each pass time specifically
+                            for GISTDA folder downloads (default 10).
+        gistda_folder_map: Mapping from NASA sat name to (GISTDA sat name,
+                           display name), e.g. {"N_Vi1": ("G_Vi1", "Suomi NPP - GISTDA")}.
 
     Returns:
         Tuple of (hotspot_list, files_downloaded_count).
@@ -257,62 +347,42 @@ def download_and_parse_excel(
     downloaded_files: set[str] = set()  # track (sat_name, date, time) to avoid dupes
 
     for pt in pass_times:
+        # 1. Download from NASA folder
         logger.info(
-            "Downloading Excel: %s (%s, %s ±%dmin)",
+            "Downloading Excel (NASA folder): %s (%s, %s ±%dmin)",
             pt.display_name, pt.thai_date, pt.thai_time, time_spread,
         )
 
-        content, matched_time = _try_download_excel(
+        hotspots = _download_and_parse_single(
             sat_name=pt.gistda_sat_name,
             date_str=pt.thai_date,
             base_time=pt.thai_time,
             display_name=pt.display_name,
             time_spread=time_spread,
-        )
-
-        if content is None:
-            logger.warning(
-                "No Excel found for %s %s_%s (tried ±%d min). Skipping.",
-                pt.display_name, pt.thai_date, pt.thai_time, time_spread,
-            )
-            continue
-
-        # Skip if we already downloaded this exact file
-        file_key = f"{pt.gistda_sat_name}_{pt.thai_date}_{matched_time}"
-        if file_key in downloaded_files:
-            logger.info("Already downloaded %s, skipping.", file_key)
-            continue
-        downloaded_files.add(file_key)
-
-        # Save to temp file and parse
-        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        logger.info(
-            "Saved Excel to %s (%d bytes) — matched time: %s",
-            tmp_path, len(content), matched_time,
-        )
-
-        hotspots = _parse_excel_sheet(
-            filepath=tmp_path,
             province_filter=province_filter,
-            sat_display_name=pt.display_name,
-            th_time=matched_time,
+            downloaded_files=downloaded_files,
         )
-
-        logger.info(
-            "Parsed %d hotspots for %s in %s (time %s)",
-            len(hotspots), province_filter, pt.display_name, matched_time,
-        )
-
         all_hotspots.extend(hotspots)
 
-        # Clean up temp file
-        try:
-            Path(tmp_path).unlink()
-        except OSError:
-            pass
+        # 2. Download from GISTDA folder if this satellite has a GISTDA equivalent
+        if gistda_folder_map and pt.gistda_sat_name in gistda_folder_map:
+            g_sat_name, g_display_name = gistda_folder_map[pt.gistda_sat_name]
+
+            logger.info(
+                "Downloading Excel (GISTDA folder): %s (%s, %s ±%dmin)",
+                g_display_name, pt.thai_date, pt.thai_time, gistda_time_spread,
+            )
+
+            g_hotspots = _download_and_parse_single(
+                sat_name=g_sat_name,
+                date_str=pt.thai_date,
+                base_time=pt.thai_time,
+                display_name=g_display_name,
+                time_spread=gistda_time_spread,
+                province_filter=province_filter,
+                downloaded_files=downloaded_files,
+            )
+            all_hotspots.extend(g_hotspots)
 
     files_downloaded = len(downloaded_files)
     logger.info(
