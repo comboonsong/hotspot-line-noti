@@ -28,8 +28,20 @@ TZ_BANGKOK = timezone(timedelta(hours=7))
 SAT_ORDER = {"Suomi NPP": 0, "Suomi NPP - GISTDA": 1, "NOAA-20": 2, "NOAA-21": 3}
 
 # Section separators
-SEP_BY_SOURCE = "========= แบ่งตามแหล่งข้อมูล ========="
-SEP_BY_DISTRICT = "========= แบ่งตามอำเภอ ========="
+SEP_BY_SOURCE = (
+    "╔══════════════════════════════╗\n"
+    "║                              ║\n"
+    "║    📡 แบ่งตามแหล่งข้อมูล        ║\n"
+    "║                              ║\n"
+    "╚══════════════════════════════╝"
+)
+SEP_BY_DISTRICT = (
+    "╔══════════════════════════════╗\n"
+    "║                              ║\n"
+    "║    🏘️ แบ่งตามอำเภอ            ║\n"
+    "║                              ║\n"
+    "╚══════════════════════════════╝"
+)
 
 
 def _format_thai_date(dt: datetime) -> str:
