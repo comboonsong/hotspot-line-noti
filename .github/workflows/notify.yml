@@ -1,0 +1,42 @@
+name: Hotspot Notification
+
+on:
+  schedule:
+    # เวลา cron เป็น UTC (ไทย UTC+7)
+    # 05:00 ICT = 22:00 UTC (วันก่อนหน้า)
+    - cron: "0 22 * * *"
+    # 06:00 ICT = 23:00 UTC (วันก่อนหน้า)
+    - cron: "0 23 * * *"
+    # 07:00 ICT = 00:00 UTC
+    - cron: "0 0 * * *"
+    # 13:00 ICT = 06:00 UTC
+    - cron: "0 6 * * *"
+    # 14:00 ICT = 07:00 UTC
+    - cron: "0 7 * * *"
+    # 15:00 ICT = 08:00 UTC
+    - cron: "0 8 * * *"
+  workflow_dispatch: # รันมือได้จากหน้า Actions
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set timezone
+        run: echo "TZ=Asia/Bangkok" >> $GITHUB_ENV
+
+      - name: Run notification
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+        run: python main.py --now
