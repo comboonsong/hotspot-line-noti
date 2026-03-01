@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 LINE Hotspot Notification Bot
-Fetches VIIRS hotspot data from GISTDA API and sends notifications to a LINE group.
+Fetches hotspot data via FIRMS API → GISTDA Excel and sends notifications to a LINE group.
 
 Usage:
-    python main.py           # Run with scheduler (06:00 and 14:00)
+    python main.py           # Run with scheduler
     python main.py --now     # Run once immediately (for testing)
 """
 
@@ -15,7 +15,8 @@ import time
 import schedule
 
 from config import Config
-from hotspot_api import fetch_hotspots
+from firms_api import discover_pass_times
+from gistda_excel import download_and_parse_excel
 from line_bot import send_group_message
 from message_formatter import format_hotspot_message
 
@@ -29,27 +30,39 @@ logger = logging.getLogger(__name__)
 
 
 def job(config: Config) -> None:
-    """Fetch hotspots, format message, and send to LINE group."""
+    """Fetch hotspots via FIRMS → GISTDA Excel, format message, and send to LINE group."""
     logger.info("=== Starting hotspot notification job ===")
 
     try:
-        # 1. Fetch hotspot data
-        hotspots = fetch_hotspots(
-            api_key=config.GISTDA_API_KEY,
-            base_url=config.GISTDA_BASE_URL,
-            province_idn=config.PROVINCE_IDN,
-            limit=config.FETCH_LIMIT,
+        # 1. Discover satellite pass times from FIRMS
+        pass_times = discover_pass_times(
+            map_key=config.FIRMS_MAP_KEY,
+            bbox=config.FIRMS_THA_BBOX,
+            sources=config.FIRMS_SOURCES,
+            firms_to_gistda=config.FIRMS_TO_GISTDA_SAT,
+            sat_display=config.GISTDA_SAT_DISPLAY,
         )
-        logger.info("Fetched %d hotspots.", len(hotspots))
+        logger.info("Discovered %d pass times.", len(pass_times))
 
-        # 2. Format notification message
+        # 2. Download and parse GISTDA Excel files
+        hotspots, files_downloaded = download_and_parse_excel(
+            pass_times=pass_times,
+            province_filter=config.PROVINCE_FILTER,
+        )
+        logger.info("Parsed %d hotspots from %d Excel files.", len(hotspots), files_downloaded)
+
+        # Detect when FIRMS found passes but GISTDA has no files yet
+        gistda_unavailable = len(pass_times) > 0 and files_downloaded == 0
+
+        # 3. Format notification message
         message = format_hotspot_message(
             hotspots=hotspots,
             schedule_times=config.SCHEDULE_TIMES,
+            gistda_unavailable=gistda_unavailable,
         )
         logger.info("Formatted message (%d chars).", len(message))
 
-        # 3. Send to LINE group
+        # 4. Send to LINE group
         send_group_message(
             channel_access_token=config.LINE_CHANNEL_ACCESS_TOKEN,
             group_id=config.LINE_GROUP_ID,
@@ -75,7 +88,7 @@ def main() -> None:
     # Load and validate config
     config = Config()
     config.validate()
-    logger.info("Configuration loaded. Province IDN: %d", config.PROVINCE_IDN)
+    logger.info("Configuration loaded. Province filter: %s", config.PROVINCE_FILTER)
     logger.info("Schedule times: %s", ", ".join(config.SCHEDULE_TIMES))
 
     if args.now:

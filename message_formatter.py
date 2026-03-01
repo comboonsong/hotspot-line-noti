@@ -1,3 +1,9 @@
+"""
+Message formatter for LINE hotspot notifications.
+
+Formats hotspot data (from GISTDA Excel) into Thai notification messages.
+"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -12,15 +18,11 @@ THAI_MONTHS = [
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
 ]
 
-# Thai confidence labels
-CONFIDENCE_LABELS = {
-    "nominal": "ปกติ",
-    "low": "ต่ำ",
-    "high": "สูง",
-}
-
 # Thailand timezone
 TZ_BANGKOK = timezone(timedelta(hours=7))
+
+# Satellite display order
+SAT_ORDER = {"Suomi NPP": 0, "NOAA-20": 1, "NOAA-21": 2}
 
 
 def _format_thai_date(dt: datetime) -> str:
@@ -36,57 +38,11 @@ def _format_time(time_str: str) -> str:
     return time_str
 
 
-def _get_confidence_label(confidence: str) -> str:
-    """Get Thai label for confidence level."""
-    return CONFIDENCE_LABELS.get(confidence.lower(), confidence)
-
-
-def _get_time_range_str(now: datetime) -> str:
-    """Get time range string from 00:00 today to current time."""
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    start_str = f"{start.strftime('%H:%M')}น. {_format_thai_date(start)}"
-    end_str = f"{now.strftime('%H:%M')}น. {_format_thai_date(now)}"
-    return f"{start_str} — {end_str}"
-
-
-def _get_next_check_time(schedule_times: list[str], now: datetime) -> str:
-    """
-    Determine the next scheduled check time.
-
-    Args:
-        schedule_times: List of time strings like ["06:00", "14:00"].
-        now: Current datetime.
-
-    Returns:
-        Next check time string, e.g. "14:00น."
-    """
-    today_times = []
-    for t in schedule_times:
-        parts = t.strip().split(":")
-        if len(parts) == 2:
-            h, m = int(parts[0]), int(parts[1])
-            check_dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
-            today_times.append((check_dt, t.strip()))
-
-    # Sort by time
-    today_times.sort(key=lambda x: x[0])
-
-    # Find next time after now
-    for check_dt, t_str in today_times:
-        if check_dt > now:
-            return f"{t_str}น."
-
-    # If all times today have passed, next is tomorrow's first time
-    if today_times:
-        return f"{today_times[0][1]}น. (พรุ่งนี้)"
-
-    return "—"
-
-
 def format_hotspot_message(
     hotspots: list[dict],
     schedule_times: list[str],
     now: datetime | None = None,
+    gistda_unavailable: bool = False,
 ) -> str:
     """
     Format hotspot data into a Thai notification message.
@@ -94,9 +50,12 @@ def format_hotspot_message(
     Groups by (satellite_name, th_time), then by (sub_district, district).
 
     Args:
-        hotspots: List of hotspot dicts from fetch_hotspots().
-        schedule_times: List of scheduled time strings.
+        hotspots: List of hotspot dicts from gistda_excel.download_and_parse_excel().
+        schedule_times: List of scheduled time strings (currently unused but kept
+                        for future use).
         now: Current datetime (defaults to now in Bangkok timezone).
+        gistda_unavailable: True if FIRMS found passes but all GISTDA Excel
+                            downloads failed.
 
     Returns:
         Formatted Thai message string.
@@ -105,6 +64,7 @@ def format_hotspot_message(
         now = datetime.now(TZ_BANGKOK)
 
     today_str = _format_thai_date(now)
+    current_time_str = f"{now.strftime('%H:%M')}น."
 
     # Header
     lines = [
@@ -112,41 +72,24 @@ def format_hotspot_message(
         f"     สนง.ทสจ. ลำพูน ขอรายงานข้อมูลจุดความร้อน วันที่ {today_str}",
     ]
 
-    # No hotspots at all
+    # No hotspots
     if not hotspots:
-        lines.append("ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน")
-        lines.append("")
-        lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
-        return "\n".join(lines)
-
-    # Filter only today's hotspots (using Thai date)
-    today_date = now.strftime("%Y-%m-%d")
-    today_hotspots = []
-    for spot in hotspots:
-        th_date = spot.get("th_date", "")
-        if th_date.startswith(today_date):
-            today_hotspots.append(spot)
-
-    logger.info(
-        "Filtered %d/%d hotspots for today (%s).",
-        len(today_hotspots), len(hotspots), today_date,
-    )
-
-    # No hotspots today
-    if not today_hotspots:
-        lines.append("ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน")
+        if gistda_unavailable:
+            lines.append(
+                f"ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน "
+                f"(ไม่มีข้อมูลให้ดาวน์โหลดจาก GISTDA เวลา {current_time_str})"
+            )
+        else:
+            lines.append("ไม่พบจุดความร้อนในพื้นที่จังหวัดลำพูน")
         lines.append("")
         lines.append("จึงเรียนมาเพื่อโปรดพิจารณา")
         return "\n".join(lines)
 
     # Group by (satellite_name, th_time)
     sat_time_groups: dict[tuple[str, str], list[dict]] = {}
-    for spot in today_hotspots:
+    for spot in hotspots:
         key = (spot.get("satellite_name", "unknown"), spot.get("th_time", "0000"))
         sat_time_groups.setdefault(key, []).append(spot)
-
-    # Sort priority for satellites: N (Suomi NPP) → N20 (NOAA-20) → N21 (NOAA-21)
-    SAT_ORDER = {"Suomi NPP": 0, "NOAA-20": 1, "NOAA-21": 2}
 
     # Sort groups by th_time first, then satellite order
     sorted_groups = sorted(
