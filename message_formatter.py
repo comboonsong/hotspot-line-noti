@@ -106,8 +106,8 @@ def _format_by_satellite(hotspots: list[dict], should_separate: bool) -> list[st
                 sat_lines.append(f"ต.{sub_district} อ.{district} จำนวน {len(area_spots)} จุด")
                 for spot in area_spots:
                     gmap = spot.get("google_maps_link", "")
-                    land = spot.get("land_use", "")
-                    sat_lines.append(f"{gmap} ({land})")
+                    area = spot.get("responsible_area", "")
+                    sat_lines.append(f"{gmap} ({area})")
 
         if should_separate:
             bubbles.append("\n".join(sat_lines))
@@ -180,10 +180,10 @@ def _format_by_district(hotspots: list[dict], should_separate: bool) -> list[str
 
             for spot in sorted_spots:
                 gmap = spot.get("google_maps_link", "")
-                land = spot.get("land_use", "")
+                area = spot.get("responsible_area", "")
                 th_time = _format_time(spot.get("th_time", "0000"))
                 sat_name = spot.get("satellite_name", "")
-                dist_lines.append(f"{gmap} ({land}, รอบเวลา {th_time} ดาวเทียม {sat_name})")
+                dist_lines.append(f"{gmap} ({area}, รอบเวลา {th_time} ดาวเทียม {sat_name})")
 
         if should_separate:
             bubbles.append("\n".join(dist_lines))
