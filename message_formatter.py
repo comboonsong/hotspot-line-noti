@@ -180,7 +180,7 @@ def _format_by_district(hotspots: list[dict], should_separate: bool) -> list[str
     """
     Format hotspots grouped by district → sub-district.
 
-    Each hotspot line includes land_use, time, and satellite name.
+    Each hotspot line includes responsible_area, time, and satellite name.
     Districts are sorted by total hotspot count descending.
     Sub-districts within each district are also sorted by count descending.
 
