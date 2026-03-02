@@ -3,19 +3,30 @@ name: Hotspot Notification
 on:
   schedule:
     # เวลา cron เป็น UTC (ไทย UTC+7)
-    # 05:00 ICT = 22:00 UTC (วันก่อนหน้า)
-    - cron: "0 22 * * *"
-    # 06:00 ICT = 23:00 UTC (วันก่อนหน้า)
-    - cron: "0 23 * * *"
-    # 07:00 ICT = 00:00 UTC
-    - cron: "0 0 * * *"
-    # 13:00 ICT = 06:00 UTC
-    - cron: "0 6 * * *"
-    # 14:00 ICT = 07:00 UTC
-    - cron: "0 7 * * *"
-    # 15:00 ICT = 08:00 UTC
-    - cron: "0 8 * * *"
-  workflow_dispatch: # รันมือได้จากหน้า Actions
+    # Shifting 5 mins past the hour to avoid GitHub congestion
+    # 05:05 ICT = 22:05 UTC (วันก่อนหน้า)
+    - cron: "5 22 * * *"
+    # 06:05 ICT = 23:05 UTC (วันก่อนหน้า)
+    - cron: "5 23 * * *"
+    # 07:05 ICT = 00:05 UTC
+    - cron: "5 0 * * *"
+    # 13:05 ICT = 06:05 UTC
+    - cron: "5 6 * * *"
+    # 14:05 ICT = 07:05 UTC
+    - cron: "5 7 * * *"
+    # 15:05 ICT = 08:05 UTC
+    - cron: "5 8 * * *"
+  workflow_dispatch:
+    inputs:
+      message_mode:
+        description: "Message format"
+        required: false
+        default: "satellite"
+        type: choice
+        options:
+          - satellite
+          - district
+          - both
 
 jobs:
   notify:
@@ -40,3 +51,4 @@ jobs:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
           FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          MESSAGE_MODE: ${{ github.event.inputs.message_mode || 'satellite' }}

@@ -61,6 +61,9 @@ class Config:
         self.TIME_SPREAD = int(os.getenv("TIME_SPREAD", "5"))
         self.GISTDA_TIME_SPREAD = int(os.getenv("GISTDA_TIME_SPREAD", "10"))
 
+        # Message format: "satellite", "district", or "both"
+        self.MESSAGE_MODE = os.getenv("MESSAGE_MODE", "satellite")
+
     def validate(self) -> None:
         """Validate that required config values are set."""
         # Safe debug prints (won't show values, just presence)

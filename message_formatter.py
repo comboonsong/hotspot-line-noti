@@ -29,18 +29,18 @@ SAT_ORDER = {"Suomi NPP": 0, "Suomi NPP - GISTDA": 1, "NOAA-20": 2, "NOAA-21": 3
 
 # Section separators
 SEP_BY_SOURCE = (
-    "╔══════════════════════════════╗\n"
-    "║                              ║\n"
-    "║    📡 แบ่งตามแหล่งข้อมูล        ║\n"
-    "║                              ║\n"
-    "╚══════════════════════════════╝"
+    "\n"
+    "\n"
+    "📡 แบ่งตามแหล่งข้อมูล 📡\n"
+    "\n"
+    "\n"
 )
 SEP_BY_DISTRICT = (
-    "╔══════════════════════════════╗\n"
-    "║                              ║\n"
-    "║    🏘️ แบ่งตามอำเภอ            ║\n"
-    "║                              ║\n"
-    "╚══════════════════════════════╝"
+    "\n"
+    "\n"
+    "🏘️ แบ่งตามอำเภอ 🏘️\n"
+    "\n"
+    "\n"
 )
 
 
@@ -206,22 +206,18 @@ def format_hotspot_message(
     schedule_times: list[str],
     now: datetime | None = None,
     gistda_unavailable: bool = False,
+    mode: str = "satellite",
 ) -> list[str]:
     """
     Format hotspot data into Thai notification messages.
-
-    Produces two complete sections, each with separator + header + content + ending:
-      1) Grouped by satellite source (แบ่งตามแหล่งข้อมูล)
-      2) Grouped by district (แบ่งตามอำเภอ)
-
-    If total hotspots >= 11, each section is split into multiple bubbles.
-    If no hotspots, returns a single no-data message.
 
     Args:
         hotspots: List of hotspot dicts from gistda_excel.
         schedule_times: Scheduled time strings (reserved for future use).
         now: Current datetime (defaults to now in Bangkok timezone).
         gistda_unavailable: True when FIRMS found passes but all downloads failed.
+        mode: Output format — "satellite" (by source, default),
+              "district" (by district), or "both" (satellite + district).
 
     Returns:
         List of formatted Thai message strings (bubbles) to send.
@@ -254,35 +250,46 @@ def format_hotspot_message(
 
     should_separate = len(hotspots) >= 11
 
-    # Build content for both formats
-    sat_bubbles = _format_by_satellite(hotspots, should_separate)
-    dist_bubbles = _format_by_district(hotspots, should_separate)
+    include_sat = mode in ("satellite", "both")
+    include_dist = mode in ("district", "both")
 
     all_bubbles: list[str] = []
 
     if should_separate:
-        # --- Format 1: by satellite ---
-        all_bubbles.append(SEP_BY_SOURCE)
-        all_bubbles.append(header_sat)
-        all_bubbles.extend(sat_bubbles)
-        all_bubbles.append(ending)
+        if include_sat:
+            sat_bubbles = _format_by_satellite(hotspots, should_separate)
+            if include_dist:
+                all_bubbles.append(SEP_BY_SOURCE)
+            all_bubbles.append(header_sat)
+            all_bubbles.extend(sat_bubbles)
+            all_bubbles.append(ending)
 
-        # --- Format 2: by district ---
-        all_bubbles.append(SEP_BY_DISTRICT)
-        all_bubbles.append(header_dist)
-        all_bubbles.extend(dist_bubbles)
-        all_bubbles.append(ending)
+        if include_dist:
+            dist_bubbles = _format_by_district(hotspots, should_separate)
+            if include_sat:
+                all_bubbles.append(SEP_BY_DISTRICT)
+            all_bubbles.append(header_dist)
+            all_bubbles.extend(dist_bubbles)
+            all_bubbles.append(ending)
     else:
-        # Format 1: single combined bubble
-        parts_sat = [SEP_BY_SOURCE, "", header_sat]
-        parts_sat.extend(sat_bubbles)
-        parts_sat.append(f"\n{ending}")
-        all_bubbles.append("\n".join(parts_sat))
+        if include_sat:
+            sat_bubbles = _format_by_satellite(hotspots, should_separate)
+            parts_sat = []
+            if include_dist:
+                parts_sat.extend([SEP_BY_SOURCE, ""])
+            parts_sat.append(header_sat)
+            parts_sat.extend(sat_bubbles)
+            parts_sat.append(f"\n{ending}")
+            all_bubbles.append("\n".join(parts_sat))
 
-        # Format 2: single combined bubble
-        parts_dist = [SEP_BY_DISTRICT, "", header_dist]
-        parts_dist.extend(dist_bubbles)
-        parts_dist.append(f"\n{ending}")
-        all_bubbles.append("\n".join(parts_dist))
+        if include_dist:
+            dist_bubbles = _format_by_district(hotspots, should_separate)
+            parts_dist = []
+            if include_sat:
+                parts_dist.extend([SEP_BY_DISTRICT, ""])
+            parts_dist.append(header_dist)
+            parts_dist.extend(dist_bubbles)
+            parts_dist.append(f"\n{ending}")
+            all_bubbles.append("\n".join(parts_dist))
 
     return all_bubbles

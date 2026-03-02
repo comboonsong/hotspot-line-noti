@@ -62,6 +62,7 @@ def job(config: Config) -> None:
             hotspots=hotspots,
             schedule_times=config.SCHEDULE_TIMES,
             gistda_unavailable=gistda_unavailable,
+            mode=config.MESSAGE_MODE,
         )
         logger.info("Formatted %d message bubbles.", len(messages))
 

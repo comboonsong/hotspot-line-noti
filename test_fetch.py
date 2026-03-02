@@ -32,7 +32,14 @@ def main():
         "--date-range",
         type=int,
         default=2,
-        help="FIRMS API date range in days (default: 1).",
+        help="FIRMS API date range in days (default: 2).",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["satellite", "district", "both"],
+        default="satellite",
+        help="Message format: satellite (default), district, or both.",
     )
     args = parser.parse_args()
 
@@ -49,6 +56,7 @@ def main():
     print(f"🕐 Target date: {today.strftime('%Y-%m-%d')}")
     print(f"📡 FIRMS date range: {args.date_range} day(s)")
     print(f"🏔  Province filter: {config.PROVINCE_FILTER}")
+    print(f"📝 Message mode: {args.mode}")
     print()
 
     # 1. Discover pass times
@@ -98,7 +106,7 @@ def main():
     print("\n" + "━" * 60)
     print("FORMATTED MESSAGE:")
     print("━" * 60)
-    messages = format_hotspot_message(hotspots, config.SCHEDULE_TIMES, today)
+    messages = format_hotspot_message(hotspots, config.SCHEDULE_TIMES, today, mode=args.mode)
     for i, msg in enumerate(messages, 1):
         print(f"--- Bubble {i} ---")
         print(msg)
