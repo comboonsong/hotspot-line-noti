@@ -112,15 +112,16 @@ cp .env.example .env
 # แก้ไขไฟล์ .env ใส่ค่าจริง
 ```
 
-| ตัวแปร                      | คำอธิบาย                                  | ค่าเริ่มต้น               |
-| --------------------------- | ----------------------------------------- | ------------------------- |
-| `LINE_CHANNEL_ACCESS_TOKEN` | Token จาก LINE Developers Console         | (ต้องระบุ)                |
-| `LINE_GROUP_ID`             | Group ID ของกลุ่ม LINE                    | (ต้องระบุ)                |
-| `FIRMS_MAP_KEY`             | API Key จาก NASA FIRMS                    | (มีค่าเริ่มต้น)           |
-| `PROVINCE_FILTER`           | ชื่อจังหวัดที่กรอง                        | `ลำพูน`                   |
-| `SCHEDULE_TIMES`            | เวลาแจ้งเตือน (คั่นด้วย `,`)              | `01:00,03:00,06:00,14:00` |
-| `TIME_SPREAD`               | Tolerance เวลาสำหรับ NASA folder (นาที)   | `5`                       |
-| `GISTDA_TIME_SPREAD`        | Tolerance เวลาสำหรับ GISTDA folder (นาที) | `10`                      |
+| ตัวแปร                      | คำอธิบาย                                       | ค่าเริ่มต้น               |
+| --------------------------- | ---------------------------------------------- | ------------------------- |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Token จาก LINE Developers Console              | (ต้องระบุ)                |
+| `LINE_GROUP_ID`             | Group ID ของกลุ่ม LINE                         | (ต้องระบุ)                |
+| `FIRMS_MAP_KEY`             | API Key จาก NASA FIRMS                         | (ต้องระบุ)                |
+| `PROVINCE_FILTER`           | ชื่อจังหวัดที่กรอง                             | `ลำพูน`                   |
+| `SCHEDULE_TIMES`            | เวลาแจ้งเตือน (คั่นด้วย `,`)                   | `01:00,03:00,06:00,14:00` |
+| `TIME_SPREAD`               | Tolerance เวลาสำหรับ NASA folder (นาที)        | `5`                       |
+| `GISTDA_TIME_SPREAD`        | Tolerance เวลาสำหรับ GISTDA folder (นาที)      | `10`                      |
+| `MESSAGE_MODE`              | รูปแบบข้อความ: `satellite`, `district`, `both` | `satellite`               |
 
 ## การใช้งาน
 
@@ -133,6 +134,8 @@ python main.py --now
 
 # ดูตัวอย่างข้อความโดยไม่ส่ง LINE
 python test_fetch.py
+python test_fetch.py --mode district
+python test_fetch.py --mode both
 
 # ทดสอบ pipeline ทั้งหมด
 python test_bot.py
@@ -152,9 +155,9 @@ python test_bot.py --date 2026-03-01 --time 11:00
 2. ตั้งค่า secrets ใน **Settings → Secrets and variables → Actions → New repository secret**:
    - `LINE_CHANNEL_ACCESS_TOKEN`
    - `LINE_GROUP_ID`
-   - `FIRMS_MAP_KEY` (ถ้าต้องการเปลี่ยนจากค่าเริ่มต้น)
+   - `FIRMS_MAP_KEY`
 
-3. สร้างไฟล์ `.github/workflows/notify.yml`:
+3. ไฟล์ `.github/workflows/notify.yml` (มีอยู่ใน repo แล้ว):
 
 ```yaml
 name: Hotspot Notification
@@ -162,19 +165,24 @@ name: Hotspot Notification
 on:
   schedule:
     # เวลา cron เป็น UTC (ไทย UTC+7)
-    # 05:00 ICT = 22:00 UTC (วันก่อนหน้า)
-    - cron: "0 22 * * *"
-    # 06:00 ICT = 23:00 UTC (วันก่อนหน้า)
-    - cron: "0 23 * * *"
-    # 07:00 ICT = 00:00 UTC
-    - cron: "0 0 * * *"
-    # 13:00 ICT = 06:00 UTC
-    - cron: "0 6 * * *"
-    # 14:00 ICT = 07:00 UTC
-    - cron: "0 7 * * *"
-    # 15:00 ICT = 08:00 UTC
-    - cron: "0 8 * * *"
-  workflow_dispatch: # รันมือได้จากหน้า Actions
+    # Shifting 25 mins past the hour to avoid GitHub congestion
+    # 05:25 ICT = 22:25 UTC (วันก่อนหน้า)
+    - cron: "25 22 * * *"
+    # 14:25 ICT = 07:25 UTC
+    - cron: "25 7 * * *"
+    # 18:25 ICT = 11:25 UTC
+    - cron: "25 11 * * *"
+  workflow_dispatch:
+    inputs:
+      message_mode:
+        description: "Message format"
+        required: false
+        default: "satellite"
+        type: choice
+        options:
+          - satellite
+          - district
+          - both
 
 jobs:
   notify:
@@ -194,15 +202,19 @@ jobs:
         run: echo "TZ=Asia/Bangkok" >> $GITHUB_ENV
 
       - name: Run notification
+        run: python main.py --now
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
           FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
-        run: python main.py --now
+          MESSAGE_MODE: ${{ github.event.inputs.message_mode || 'satellite' }}
 ```
 
 > **หมายเหตุ:** GitHub Actions free tier ให้ 2,000 นาที/เดือน
-> บอทนี้ใช้ประมาณ 60 นาที/เดือน (3% ของ free tier)
+> บอทนี้ใช้ประมาณ 30 นาที/เดือน (1.5% ของ free tier)
+>
+> เมื่อรันมือจากหน้า Actions จะมี dropdown ให้เลือก `MESSAGE_MODE` (satellite / district / both)
+> เมื่อรันแบบ schedule จะใช้ค่าเริ่มต้น `satellite`
 
 ### ตัวเลือกที่ 2: crontab (Linux)
 
@@ -210,13 +222,10 @@ jobs:
 # แก้ไข crontab
 crontab -e
 
-# เพิ่มบรรทัด
-0 5 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
-0 6 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
-0 7 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
-0 13 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
-0 14 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
-0 15 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
+# เพิ่มบรรทัด (ปรับเวลาตามต้องการ)
+25 5 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
+25 14 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
+25 18 * * * cd /path/to/line-hotspot-noti && /path/to/venv/bin/python main.py --now
 ```
 
 ### ตัวเลือกที่ 3: systemd (Linux)
@@ -247,24 +256,25 @@ sudo systemctl enable line-hotspot
 sudo systemctl start line-hotspot
 ```
 
-## รูปแบบข้อความ
+## รูปแบบข้อความ (`MESSAGE_MODE`)
 
-บอทส่งข้อความ 2 รูปแบบในแต่ละครั้ง:
+เลือกได้ 3 โหมดผ่าน environment variable `MESSAGE_MODE`:
 
-### รูปแบบที่ 1 — แบ่งตามแหล่งข้อมูล
+| โหมด        | คำอธิบาย                                             | ค่าเริ่มต้น |
+| ----------- | ---------------------------------------------------- | ----------- |
+| `satellite` | แบ่งตามแหล่งข้อมูล (ดาวเทียม → เวลา → ตำบล/อำเภอ)    | ✅          |
+| `district`  | แบ่งตามอำเภอ (อำเภอ → ตำบล พร้อมระบุดาวเทียมและเวลา) |             |
+| `both`      | ส่งทั้ง 2 รูปแบบ คั่นด้วย separator                  |             |
 
-จัดกลุ่มตามดาวเทียม → เวลา → ตำบล/อำเภอ
-เรียงลำดับดาวเทียม: Suomi NPP → Suomi NPP - GISTDA → NOAA-20 → NOAA-21
+### การเรียงลำดับ
 
-### รูปแบบที่ 2 — แบ่งตามอำเภอ
-
-จัดกลุ่มตามอำเภอ → ตำบล พร้อมระบุดาวเทียมและเวลาในแต่ละจุด
-เรียงลำดับอำเภอตามจำนวนจุดความร้อนจากมากไปน้อย
+- **satellite**: เรียงตามดาวเทียม Suomi NPP → Suomi NPP - GISTDA → NOAA-20 → NOAA-21
+- **district**: เรียงตามจำนวนจุดความร้อนจากมากไปน้อย
 
 ### การแยก Bubble
 
 - ถ้าจุดความร้อน **< 11 จุด** → รวมเป็น 1 bubble ต่อรูปแบบ
-- ถ้าจุดความร้อน **≥ 11 จุด** → แยก bubble ตามดาวเทียม (แบบ 1) หรือตามอำเภอ (แบบ 2)
+- ถ้าจุดความร้อน **≥ 11 จุด** → แยก bubble ตามดาวเทียม (แบบ satellite) หรือตามอำเภอ (แบบ district)
 
 ## หมายเหตุทางเทคนิค
 
