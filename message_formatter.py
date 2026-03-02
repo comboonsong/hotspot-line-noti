@@ -27,6 +27,9 @@ TZ_BANGKOK = timezone(timedelta(hours=7))
 # Satellite display order
 SAT_ORDER = {"Suomi NPP": 0, "Suomi NPP - GISTDA": 1, "NOAA-20": 2, "NOAA-21": 3}
 
+# Maximum hotspots per bubble in satellite-based format
+MAX_HOTSPOTS_PER_BUBBLE = 40
+
 # Section separators
 SEP_BY_SOURCE = (
     "\n"
@@ -66,7 +69,13 @@ def _format_by_satellite(hotspots: list[dict], should_separate: bool) -> list[st
     Format hotspots grouped by satellite → time → area.
 
     Returns content-only bubbles (no header / ending).
-    If should_separate, one bubble per satellite; otherwise one combined bubble.
+
+    When should_separate is True:
+      - Each satellite + time combination starts a new bubble.
+      - Each bubble contains at most MAX_HOTSPOTS_PER_BUBBLE hotspots.
+      - If a sub-district is split across bubbles, a "(ต่อ)" marker is added.
+    When should_separate is False:
+      - All hotspots are combined into one bubble.
     """
     # Group: { satellite_name: { th_time: [hotspots] } }
     sat_groups: dict[str, dict[str, list[dict]]] = {}
@@ -82,39 +91,81 @@ def _format_by_satellite(hotspots: list[dict], should_separate: bool) -> list[st
     combined_lines: list[str] = []
 
     for satellite_name, time_groups in sorted_sats:
-        sat_lines: list[str] = []
-
         # Sort time groups chronologically
         for th_time_raw, spots in sorted(time_groups.items()):
             th_time = _format_time(th_time_raw)
 
-            if sat_lines:
-                sat_lines.append("")
-
-            sat_lines.append(
+            intro_line = (
                 f"พบจุดความร้อนจากดาวเทียม {satellite_name} ระบบ VIIRS "
                 f"รอบเวลา {th_time} จำนวน {len(spots)} จุด ดังนี้"
             )
 
-            # Sub-group by (sub_district, district)
-            area_groups: dict[tuple[str, str], list[dict]] = {}
-            for spot in spots:
-                key = (spot.get("sub_district_th", ""), spot.get("district_th", ""))
-                area_groups.setdefault(key, []).append(spot)
+            if should_separate:
+                # Each satellite+time → new set of bubbles with 40-hotspot limit
+                current_lines: list[str] = [intro_line]
+                hotspot_count = 0
 
-            for (sub_district, district), area_spots in area_groups.items():
-                sat_lines.append(f"ต.{sub_district} อ.{district} จำนวน {len(area_spots)} จุด")
-                for spot in area_spots:
-                    gmap = spot.get("google_maps_link", "")
-                    area = spot.get("responsible_area", "")
-                    sat_lines.append(f"{gmap} ({area})")
+                # Sub-group by (sub_district, district)
+                area_groups: dict[tuple[str, str], list[dict]] = {}
+                for spot in spots:
+                    key = (spot.get("sub_district_th", ""), spot.get("district_th", ""))
+                    area_groups.setdefault(key, []).append(spot)
 
-        if should_separate:
-            bubbles.append("\n".join(sat_lines))
-        else:
-            if combined_lines:
-                combined_lines.append("")
-            combined_lines.extend(sat_lines)
+                for (sub_district, district), area_spots in area_groups.items():
+                    for i, spot in enumerate(area_spots):
+                        # Check limit before adding each hotspot
+                        if hotspot_count >= MAX_HOTSPOTS_PER_BUBBLE:
+                            # Preview line when splitting mid-sub-district
+                            if i > 0:
+                                remaining = len(area_spots) - i
+                                current_lines.append(
+                                    f"ต.{sub_district} อ.{district} "
+                                    f"จุดความร้อน {remaining} จุด ที่เหลือระบุในข้อความถัดไป"
+                                )
+                            bubbles.append("\n".join(current_lines))
+                            current_lines = []
+                            hotspot_count = 0
+
+                        # Add sub-district header when needed
+                        if i == 0:
+                            current_lines.append(
+                                f"ต.{sub_district} อ.{district} จำนวน {len(area_spots)} จุด"
+                            )
+                        elif hotspot_count == 0:
+                            # Continuation after bubble split
+                            remaining = len(area_spots) - i
+                            current_lines.append(
+                                f"ต.{sub_district} อ.{district} (ต่อ) จำนวน {remaining} จุด"
+                            )
+
+                        gmap = spot.get("google_maps_link", "")
+                        area = spot.get("responsible_area", "")
+                        current_lines.append(f"{gmap} ({area})")
+                        hotspot_count += 1
+
+                if current_lines:
+                    bubbles.append("\n".join(current_lines))
+            else:
+                # Not separated: combine into one bubble
+                sat_lines: list[str] = []
+                if combined_lines:
+                    combined_lines.append("")
+
+                sat_lines.append(intro_line)
+
+                area_groups: dict[tuple[str, str], list[dict]] = {}
+                for spot in spots:
+                    key = (spot.get("sub_district_th", ""), spot.get("district_th", ""))
+                    area_groups.setdefault(key, []).append(spot)
+
+                for (sub_district, district), area_spots in area_groups.items():
+                    sat_lines.append(f"ต.{sub_district} อ.{district} จำนวน {len(area_spots)} จุด")
+                    for spot in area_spots:
+                        gmap = spot.get("google_maps_link", "")
+                        area = spot.get("responsible_area", "")
+                        sat_lines.append(f"{gmap} ({area})")
+
+                combined_lines.extend(sat_lines)
 
     if not should_separate:
         return ["\n".join(combined_lines)] if combined_lines else []
@@ -261,8 +312,10 @@ def format_hotspot_message(
             if include_dist:
                 all_bubbles.append(SEP_BY_SOURCE)
             all_bubbles.append(header_sat)
+            # Append ending to the last content bubble
+            if sat_bubbles:
+                sat_bubbles[-1] += f"\n\n{ending}"
             all_bubbles.extend(sat_bubbles)
-            all_bubbles.append(ending)
 
         if include_dist:
             dist_bubbles = _format_by_district(hotspots, should_separate)
