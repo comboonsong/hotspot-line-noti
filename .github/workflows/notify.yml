@@ -6,10 +6,8 @@ on:
     # Shifting 25 mins past the hour to avoid GitHub congestion
     # 05:25 ICT = 22:25 UTC (วันก่อนหน้า)
     - cron: "25 22 * * *"
-    # 14:25 ICT = 07:25 UTC
-    - cron: "25 7 * * *"
-    # 18:25 ICT = 11:25 UTC
-    - cron: "25 11 * * *"
+    # 16:25 ICT = 09:25 UTC
+    - cron: "25 9 * * *"
   workflow_dispatch:
     inputs:
       message_mode:
