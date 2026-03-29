@@ -353,10 +353,13 @@ def download_and_parse_excel(
             pass
 
     # 4. Filter hotspots by COL_TIME (exact window — no buffer)
-    hotspots_in_window = [
-        h for h in all_parsed
-        if start_hhmm <= h["th_time"] <= end_hhmm
-    ]
+    # To avoid notifying the exact same time from the previous run's latest hotspot,
+    # we use strictly greater than (>), unless the window starts at "0000" (daily reset).
+    hotspots_in_window = []
+    for h in all_parsed:
+        is_after_start = (start_hhmm <= h["th_time"]) if start_hhmm == "0000" else (start_hhmm < h["th_time"])
+        if is_after_start and h["th_time"] <= end_hhmm:
+            hotspots_in_window.append(h)
 
     logger.info(
         "Hotspot filter [%s–%s]: %d/%d hotspots kept for %s",
