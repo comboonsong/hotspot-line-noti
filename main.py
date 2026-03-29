@@ -20,6 +20,7 @@ from config import Config
 from gistda_excel import TZ_BANGKOK, download_and_parse_excel
 from line_bot import send_group_message
 from message_formatter import format_hotspot_message
+from daily_logger import save_daily_messages
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +78,13 @@ def job(config: Config) -> None:
             channel_access_token=config.LINE_CHANNEL_ACCESS_TOKEN,
             group_id=config.LINE_GROUP_ID,
             message_texts=messages,
+        )
+
+        # 3.5 Save messages to daily JSON for the website
+        save_daily_messages(
+            messages=messages,
+            window_start=config.WINDOW_START,
+            window_end=config.WINDOW_END,
         )
 
         # 4. Output latest hotspot time for GitHub Actions state tracking

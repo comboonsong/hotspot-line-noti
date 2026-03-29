@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกจุดความร้อนประจำวัน (รายวัน)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --accent-color: #ff5252;
+            --border-color: #333333;
+            --bubble-bg: #2d2d2d;
+            --bubble-text: #e0e0e0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--accent-color);
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .date-display {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .info-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 10px;
+            background: rgba(255, 82, 82, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .rounds-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        details {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        details[open] {
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        summary {
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            cursor: pointer;
+            list-style: none; /* Hide default arrow */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--surface-color);
+            transition: background-color 0.2s;
+        }
+
+        summary:hover {
+            background-color: #252525;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        summary::after {
+            content: '▼';
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            transition: transform 0.3s ease;
+        }
+
+        details[open] summary::after {
+            transform: rotate(180deg);
+        }
+
+        .details-content {
+            padding: 0 20px 20px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--surface-color);
+        }
+
+        .message-bubble {
+            background-color: var(--bubble-bg);
+            color: var(--bubble-text);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: inherit;
+            font-size: 0.95rem;
+            border-left: 4px solid var(--accent-color);
+            line-height: 1.5;
+        }
+
+        .no-data {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 40px 20px;
+            background-color: var(--surface-color);
+            border-radius: 12px;
+            border: 1px dashed var(--border-color);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* Adjusting for mobile */
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            summary { padding: 12px 15px; font-size: 1rem; }
+            .message-bubble { padding: 12px; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🔥 บันทึกจุดความร้อน (LINE Bot)</h1>
+        <div class="date-display" id="dateDisplay">กำลังโหลด...</div>
+        <div class="info-text">ข้อมูลจะถูกเริ่มใหม่ในทุกๆ วันเวลาเที่ยงคืน (00:00น.)</div>
+    </header>
+
+    <main id="mainContainer">
+        <div class="loading">กำลังดึงข้อมูล...</div>
+    </main>
+
+    <script>
+        async function fetchDailyMessages() {
+            try {
+                // To prevent caching, add a timestamp query parameter
+                const response = await fetch(`daily_messages.json?t=${new Date().getTime()}`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('ไม่พบไฟล์ข้อมูลในวันนี้ (ยังไม่มีการแจ้งเตือน)');
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                renderData(data);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                renderError(error.message || 'ไม่สามารถโหลดข้อมูลได้');
+            }
+        }
+
+        function renderData(data) {
+            const dateDisplay = document.getElementById('dateDisplay');
+            const mainContainer = document.getElementById('mainContainer');
+
+            // Set Title Date
+            if (data.display_date) {
+                dateDisplay.textContent = `ประจำวันที่: ${data.display_date}`;
+            } else if (data.date) {
+                dateDisplay.textContent = `ประจำวันที่: ${data.date}`;
+            } else {
+                dateDisplay.textContent = `ไม่พบข้อมูลวันที่`;
+            }
+
+            // Render Rounds
+            if (!data.rounds || data.rounds.length === 0) {
+                mainContainer.innerHTML = `
+                    <div class="no-data">
+                        <h3>ยังไม่มีการตรวจสอบจุดความร้อนในวันนี้</h3>
+                    </div>
+                `;
+                return;
+            }
+
+            // Map and reverse to show latest round on top
+            const roundsHtml = [...data.rounds].reverse().map(round => {
+                const messagesHtml = (round.messages || []).map(msg => 
+                    `<pre class="message-bubble">${escapeHtml(msg)}</pre>`
+                ).join('');
+
+                return `
+                    <details>
+                        <summary>${escapeHtml(round.time_window || 'รอบที่ไม่ทราบเวลา')}</summary>
+                        <div class="details-content">
+                            ${messagesHtml}
+                        </div>
+                    </details>
+                `;
+            }).join('');
+
+            mainContainer.innerHTML = `
+                <div class="rounds-container">
+                    ${roundsHtml}
+                </div>
+            `;
+        }
+
+        function renderError(message) {
+            const dateDisplay = document.getElementById('dateDisplay');
+            const mainContainer = document.getElementById('mainContainer');
+            
+            const today = new Date();
+            const thaiDateOpts = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Bangkok' };
+            dateDisplay.textContent = `ประจำวันที่: ${today.toLocaleDateString('th-TH', thaiDateOpts)}`;
+
+            mainContainer.innerHTML = `
+                <div class="no-data">
+                    <h3 style="margin-bottom: 10px;">${message}</h3>
+                    <p style="font-size: 0.9rem;">ระบบจะแสดงข้อมูลเมื่อมีการรันแจ้งเตือนในรอบถัดไป</p>
+                </div>
+            `;
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Initialize fetching on load
+        document.addEventListener('DOMContentLoaded', fetchDailyMessages);
+    </script>
+</body>
+</html>

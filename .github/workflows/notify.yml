@@ -124,21 +124,25 @@ jobs:
           WINDOW_START: ${{ steps.window.outputs.WINDOW_START }}
           WINDOW_END: ${{ steps.window.outputs.WINDOW_END }}
 
-      # ── Persist state for next run (only if new hotspots were found) ─────
-      - name: Save hotspot state
-        if: steps.notify.outputs.LATEST_HOTSPOT_TIME != ''
+      # ── Persist state and daily logs ─────────────────────────────────────
+      - name: Save state and daily logs
         run: |
           NEW_TIME="${{ steps.notify.outputs.LATEST_HOTSPOT_TIME }}"
-          echo "$NEW_TIME" > .hotspot_state
+          if [ -n "$NEW_TIME" ]; then
+            echo "$NEW_TIME" > .hotspot_state
+          fi
+          
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git add .hotspot_state
-          # Only commit if the file actually changed
+          
+          git add .hotspot_state docs/daily_messages.json
+          
+          # Only commit if files actually changed
           if git diff --cached --quiet; then
-            echo "ℹ️  State unchanged ($NEW_TIME) — no commit needed."
+            echo "ℹ️  State and logs unchanged — no commit needed."
           else
-            git commit -m "chore: update hotspot state → $NEW_TIME [skip ci]"
+            git commit -m "chore: update hotspot state and daily logs [skip ci]"
             git pull --rebase origin ${{ github.ref_name }}
             git push
-            echo "✅ State saved: LAST_HOTSPOT_TIME=$NEW_TIME"
+            echo "✅ State and logs saved."
           fi
