@@ -3,16 +3,16 @@ name: Hotspot Notification
 on:
   schedule:
     # เวลา cron เป็น UTC (ไทย = UTC+7)
-    - cron: "25 22 * * *"   # 05:25 ICT → window 0000–0525 (รอบเช้า คงที่)
-    - cron: "00 23 * * *"   # 06:00 ICT → window 0000–0600
-    - cron: "00 0 * * *"    # 07:00 ICT → window 0000–0700
-    - cron: "00 4 * * *"    # 11:00 ICT → window LAST–1100
-    - cron: "00 5 * * *"    # 12:00 ICT → window LAST–1200
-    - cron: "00 6 * * *"    # 13:00 ICT → window LAST–1300
-    - cron: "00 7 * * *"    # 14:00 ICT → window LAST–1400
-    - cron: "00 8 * * *"    # 15:00 ICT → window LAST–1500
-    - cron: "00 9 * * *"    # 16:00 ICT → window LAST–1600
-    - cron: "00 10 * * *"   # 17:00 ICT → window LAST–1700
+    - cron: "25 22 * * *" # 05:25 ICT → window 0000–0525 (รอบเช้า คงที่)
+    - cron: "00 23 * * *" # 06:00 ICT → window 0000–0600
+    - cron: "00 0 * * *" # 07:00 ICT → window 0000–0700
+    - cron: "00 4 * * *" # 11:00 ICT → window LAST–1100
+    - cron: "00 5 * * *" # 12:00 ICT → window LAST–1200
+    - cron: "00 6 * * *" # 13:00 ICT → window LAST–1300
+    - cron: "00 7 * * *" # 14:00 ICT → window LAST–1400
+    - cron: "00 8 * * *" # 15:00 ICT → window LAST–1500
+    - cron: "00 9 * * *" # 16:00 ICT → window LAST–1600
+    - cron: "00 10 * * *" # 17:00 ICT → window LAST–1700
   workflow_dispatch:
     inputs:
       message_mode:
@@ -34,7 +34,7 @@ on:
         default: ""
 
 permissions:
-  contents: write   # required to commit .hotspot_state
+  contents: write # required to commit .hotspot_state
 
 jobs:
   notify:
@@ -75,6 +75,24 @@ jobs:
           LAST="${{ steps.state.outputs.LAST_HOTSPOT_TIME }}"
           FALLBACK="0000"
 
+          apply_lower_bound() {
+            local _WEND=$1
+            local _LAST=$2
+            local _FALLBACK="0000"
+            local _WEND_H=${_WEND:0:2}
+            local _WEND_M=${_WEND:2:2}
+            local _LB_H=$(( 10#$_WEND_H - 3 ))
+            local _LB_H_STR=$(printf "%02d" $_LB_H)
+            local _LB="${_LB_H_STR}${_WEND_M}"
+            local _LAST_VAL=$((10#${_LAST:-$_FALLBACK}))
+            local _LB_VAL=$((10#${_LB}))
+            if [ "$_LAST_VAL" -lt "$_LB_VAL" ]; then
+              echo "$_LB"
+            else
+              echo "${_LAST:-$_FALLBACK}"
+            fi
+          }
+
           case "${{ github.event.schedule }}" in
             "25 22 * * *")
               # Run 1: always start from 00:00 (daily reset)
@@ -87,25 +105,32 @@ jobs:
               WSTART="0000"; WEND="0700"
               ;;
             "00 4 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1100"
+              WEND="1100"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 5 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1200"
+              WEND="1200"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 6 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1300"
+              WEND="1300"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 7 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1400"
+              WEND="1400"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 8 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1500"
+              WEND="1500"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 9 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1600"
+              WEND="1600"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             "00 10 * * *")
-              WSTART="${LAST:-$FALLBACK}"; WEND="1700"
+              WEND="1700"
+              WSTART=$(apply_lower_bound "$WEND" "$LAST")
               ;;
             *)
               # Manual trigger via workflow_dispatch
@@ -139,12 +164,12 @@ jobs:
           if [ -n "$NEW_TIME" ]; then
             echo "$NEW_TIME" > .hotspot_state
           fi
-          
+
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          
+
           git add .hotspot_state docs/daily_messages.json
-          
+
           # Only commit if files actually changed
           if git diff --cached --quiet; then
             echo "ℹ️  State and logs unchanged — no commit needed."
