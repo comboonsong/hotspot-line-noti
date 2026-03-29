@@ -73,18 +73,46 @@ def job(config: Config) -> None:
         )
         logger.info("Formatted %d message bubbles.", len(messages))
 
-        # 3. Send to LINE group
-        send_group_message(
-            channel_access_token=config.LINE_CHANNEL_ACCESS_TOKEN,
-            group_id=config.LINE_GROUP_ID,
-            message_texts=messages,
-        )
-
-        # 3.5 Save messages to daily JSON for the website
+        # 3. Save full messages to daily JSON for the website
         save_daily_messages(
             messages=messages,
             window_start=config.WINDOW_START,
             window_end=config.WINDOW_END,
+        )
+
+        # 4. Prepare message to send to LINE group
+        is_run_1 = (config.WINDOW_END == "0525" or not config.WINDOW_END)
+        
+        if is_run_1:
+            messages_to_send = messages
+            logger.info("Run 1 (Morning): Sending full message to LINE.")
+        else:
+            w_start = config.WINDOW_START
+            w_end = config.WINDOW_END
+            
+            # Formulate human-readable time
+            display_start = f"{w_start[:2]}:{w_start[2:]}น." if w_start and len(w_start) == 4 and w_start.isdigit() else w_start
+            display_end = f"{w_end[:2]}:{w_end[2:]}น." if w_end and len(w_end) == 4 and w_end.isdigit() else w_end
+            if not display_start:
+                display_start = "00:00น." if now.hour < 12 else "12:00น."
+            if not display_end:
+                display_end = f"{now.strftime('%H:%M')}น."
+                
+            web_url = "https://comboonsong.github.io/hotspot-line-noti/"
+            
+            if hotspots:
+                short_msg = f"🔥 พบจุดความร้อนเพิ่มเติม รอบเวลา {display_start} ถึง {display_end} โดยข้อความจะอยู่ใน {web_url}"
+            else:
+                short_msg = f"❌ ไม่พบจุดความร้อนเพิ่มเติม รอบเวลา {display_start} ถึง {display_end} โดยข้อความจะอยู่ใน {web_url}"
+            
+            messages_to_send = [short_msg]
+            logger.info("Run 2+: Sending short summary message to LINE.")
+
+        # 5. Send to LINE group
+        send_group_message(
+            channel_access_token=config.LINE_CHANNEL_ACCESS_TOKEN,
+            group_id=config.LINE_GROUP_ID,
+            message_texts=messages_to_send,
         )
 
         # 4. Output latest hotspot time for GitHub Actions state tracking

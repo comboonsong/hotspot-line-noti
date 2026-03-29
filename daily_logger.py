@@ -47,7 +47,7 @@ def save_daily_messages(messages: list[str], window_start: str, window_end: str)
         if not display_end:
             display_end = f"{now.strftime('%H:%M')}น."
 
-        round_name = f"รอบ {display_start} ถึง {display_end}"
+        round_name = f"รอบแจ้งเตือน {display_end}"
 
         new_round = {
             "time_window": round_name,

@@ -19,7 +19,7 @@ class Config:
 
         # Schedule times (comma-separated, e.g. "06:00,14:00")
         self.SCHEDULE_TIMES = os.getenv(
-            "SCHEDULE_TIMES", "05:25,11:00,12:00,13:00,14:00,15:00,16:00,17:00"
+            "SCHEDULE_TIMES", "05:25,06:00,07:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00"
         ).split(",")
 
         # Explicit time window for this run (set by GitHub Actions)
